@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0b1a20" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="サッカード3分" />
+<meta name="description" content="上下・左右・斜め・ランダムに飛ぶ点を、眼だけで追う3分間のサッケード。点の中の数字を足していき、最後に合計を答える。Functional Neuro TrainingのLite PWA。" />
+<title>サッカード3分 ─ 眼の下地づくり / Functional Neuro Training</title>
+
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet" />
+
+<style>
+  /* ===== 配色：ユニバーサルデザイン（FNT共通） ===== */
+  :root{
+    --bg0:#0b1a20; --bg1:#123138; --bg2:#16414a;
+    --accent:#7fe0cd; --accent2:#3fa895; --accentInk:#06231d;
+    --dot:#ffd166; --dotInk:#2a1c00;
+    --ink:#f2faf7; --muted:#a8c6bf; --line:rgba(255,255,255,.14);
+    --card:rgba(255,255,255,.07); --good:#7fe0cd; --bad:#ffb4a8;
+    --vh:1vh;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html,body{ overflow-x:hidden; max-width:100%; min-height:100%; }
+  body{
+    font-family:"M PLUS Rounded 1c", system-ui, sans-serif; font-weight:700;
+    color:var(--ink); line-height:1.7;
+    background:radial-gradient(120% 90% at 50% 6%, var(--bg2) 0%, var(--bg1) 44%, var(--bg0) 100%);
+    background-attachment:fixed;
+    min-height:100vh; min-height:100dvh; min-height:calc(var(--vh) * 100);
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  body.playing{ overflow:hidden; touch-action:none; }
+  .scroll, .scroll *{ touch-action:auto !important; }
+  body.playing header, body.playing footer{ visibility:hidden; pointer-events:none; }
+
+  button{ font-family:inherit; font-weight:700; cursor:pointer; border:none; }
+  a{ color:var(--accent); }
+  :focus-visible{ outline:3px solid var(--accent); outline-offset:3px; border-radius:8px; }
+
+  /* ===== スプラッシュ（起動時だけ） ===== */
+  #splash{
+    position:fixed; inset:0; z-index:1000; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; padding:32px;
+    background:radial-gradient(120% 90% at 50% 20%, var(--bg2) 0%, var(--bg1) 45%, var(--bg0) 100%);
+    transition:opacity .45s ease, visibility .45s ease;
+  }
+  #splash.hide{ opacity:0; visibility:hidden; pointer-events:none; }
+  #splash img{ width:132px; height:132px; margin-bottom:22px; border-radius:26px; }
+  #splash .fnt{ font-size:13px; letter-spacing:.24em; color:var(--muted); margin-bottom:14px; white-space:nowrap; }
+  #splash h1{ font-size:30px; font-weight:800; color:var(--accent); margin-bottom:10px; }
+  #splash .lead{ font-size:14px; color:var(--muted); margin-bottom:30px; }
+  #splash .tapstart{
+    min-height:52px; padding:14px 34px; border-radius:16px; font-size:17px; font-weight:800;
+    color:var(--accentInk); background:linear-gradient(180deg,var(--accent),var(--accent2));
+    animation:breathe 2.4s ease-in-out infinite;
+  }
+  #splash .copy{ position:absolute; bottom:calc(20px + env(safe-area-inset-bottom)); font-size:11px; color:var(--muted); }
+  @keyframes breathe{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.05); } }
+  #splash .audioNote{ display:flex; flex-direction:column; align-items:center; gap:10px; margin-top:22px; }
+  #splash .audioNote .note{ font-size:12px; color:var(--muted); }
+  .muteToggle{
+    min-height:40px; padding:8px 20px; border-radius:14px; font-size:13px; font-weight:700;
+    color:var(--accent); background:var(--card); border:1px solid var(--line);
+    display:inline-flex; align-items:center; gap:6px;
+  }
+  .muteToggle.off{ color:var(--muted); opacity:.85; }
+
+  /* ===== レイアウト ===== */
+  .app{ width:100%; max-width:480px; margin:0 auto; min-height:100vh; min-height:calc(var(--vh) * 100);
+    display:flex; flex-direction:column; }
+  header{ display:flex; align-items:center; justify-content:space-between; padding:12px 16px 4px; }
+  .logo{ display:flex; align-items:center; gap:10px; }
+  .logo img{ width:34px; height:34px; }
+  .logo b{ font-size:15px; font-weight:800; letter-spacing:.02em; }
+  .menuBtn{ width:46px; height:46px; border-radius:12px; background:var(--card); color:var(--ink);
+    font-size:22px; display:flex; align-items:center; justify-content:center; }
+  main{ flex:1; display:flex; flex-direction:column; padding:8px 20px 4px; }
+  .screen{ display:none; flex:1; flex-direction:column; }
+  .screen.active{ display:flex; }
+  .screen.scroll{ overflow-y:auto; -webkit-overflow-scrolling:touch; }
+  .step-label{ font-size:12px; letter-spacing:.16em; color:var(--accent); margin-bottom:8px; }
+  h2{ font-size:23px; font-weight:800; line-height:1.5; margin-bottom:14px; }
+  .desc{ font-size:15px; color:var(--muted); line-height:1.9; }
+  .desc b{ color:var(--ink); }
+  .howList{ list-style:none; margin:16px 0; display:flex; flex-direction:column; gap:12px; }
+  .howList li{ display:flex; gap:12px; align-items:flex-start; padding:14px 16px; border-radius:14px;
+    background:var(--card); border:1px solid var(--line); font-size:15px; line-height:1.7; }
+  .howList .no{ flex:none; width:26px; height:26px; border-radius:50%; background:var(--accent);
+    color:var(--accentInk); font-weight:800; font-size:14px; display:flex; align-items:center; justify-content:center; }
+  .pts{ margin:4px 0 14px; padding:14px 16px; border-radius:14px; background:rgba(127,224,205,.08);
+    border:1px solid rgba(127,224,205,.28); font-size:14px; line-height:1.9; color:var(--muted); }
+  .pts b{ color:var(--ink); }
+  .cta{ margin-top:auto; }
+  .btn{ width:100%; min-height:56px; padding:16px; border-radius:16px; font-size:17px; font-weight:800;
+    color:var(--accentInk); background:linear-gradient(180deg,var(--accent),var(--accent2)); }
+  .btn:active{ transform:translateY(1px); }
+  .btn.ghost{ color:var(--ink); background:transparent; border:1px solid var(--line); }
+  .btn:disabled{ opacity:.45; }
+  .spacer{ height:14px; }
+
+  /* ===== プレイ画面（全面） ===== */
+  #play{ position:fixed; inset:0; z-index:40; display:none;
+    background:radial-gradient(120% 90% at 50% 50%, var(--bg2) 0%, var(--bg1) 48%, var(--bg0) 100%); }
+  body.playing #play{ display:block; }
+  .topbar{ position:absolute; left:0; right:0; top:0;
+    padding:calc(env(safe-area-inset-top) + 10px) 16px 8px;
+    display:flex; align-items:center; justify-content:space-between; font-size:14px; color:var(--muted); }
+  .segName{ font-size:16px; font-weight:800; color:var(--accent); letter-spacing:.06em; }
+  .segName small{ font-size:12px; color:var(--muted); margin-left:6px; font-weight:700; }
+  .timeLeft{ font-variant-numeric:tabular-nums; letter-spacing:.06em; }
+  .ctrl{ position:absolute; left:0; right:0; bottom:0; display:flex; justify-content:center; gap:10px;
+    padding:8px 16px calc(env(safe-area-inset-bottom) + 12px); }
+  .ctrl button{ min-height:44px; padding:10px 18px; border-radius:14px; font-size:14px;
+    color:var(--ink); background:var(--card); border:1px solid var(--line); }
+  /* 点が動く範囲（上のバーと下のボタンの間） */
+  #field{ position:absolute; left:0; right:0;
+    top:calc(env(safe-area-inset-top) + 52px); bottom:calc(env(safe-area-inset-bottom) + 72px); }
+  #dot{ position:absolute; width:62px; height:62px; margin:-31px 0 0 -31px; border-radius:50%;
+    background:var(--dot); color:var(--dotInk); font-size:28px; font-weight:800;
+    display:flex; align-items:center; justify-content:center; line-height:1;
+    box-shadow:0 0 0 6px rgba(255,209,102,.18); font-variant-numeric:tabular-nums; }
+  #dot.hide{ visibility:hidden; }
+  .banner{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    padding:14px 26px; border-radius:18px; background:rgba(11,26,32,.86); border:1px solid var(--line);
+    font-size:22px; font-weight:800; color:var(--accent); text-align:center; pointer-events:none;
+    opacity:0; transition:opacity .2s ease; white-space:nowrap; }
+  .banner.show{ opacity:1; }
+  .banner small{ display:block; font-size:13px; color:var(--muted); margin-top:4px; }
+  .pauseCover{ position:absolute; inset:0; background:rgba(11,26,32,.9); display:none;
+    flex-direction:column; align-items:center; justify-content:center; gap:14px; z-index:45; text-align:center; padding:24px; }
+  .pauseCover.show{ display:flex; }
+  .pauseCover b{ font-size:24px; color:var(--accent); }
+  .pauseCover p{ font-size:13px; color:var(--muted); }
+  .pauseCover .btn{ max-width:280px; }
+  .countIn{ position:absolute; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center;
+    font-size:88px; font-weight:800; color:var(--accent); z-index:44; background:rgba(11,26,32,.7); }
+  .countIn small{ font-size:15px; color:var(--muted); margin-top:6px; }
+  .countIn.show{ display:flex; }
+
+  /* ===== 答え・結果 ===== */
+  .answerBox{ display:flex; flex-direction:column; align-items:center; gap:10px; margin:10px 0 6px; }
+  .answerShow{ width:100%; min-height:72px; border-radius:16px; background:var(--card); border:1px solid var(--line);
+    font-size:44px; font-weight:800; color:var(--accent); display:flex; align-items:center; justify-content:center;
+    font-variant-numeric:tabular-nums; letter-spacing:.04em; }
+  .answerShow.empty{ color:var(--muted); font-size:18px; }
+  .pad{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; width:100%; margin-top:6px; }
+  .pad button{ min-height:58px; border-radius:14px; font-size:24px; color:var(--ink);
+    background:var(--card); border:1px solid var(--line); touch-action:manipulation; }
+  .pad button:active{ background:rgba(127,224,205,.18); }
+  .pad .sub{ font-size:15px; color:var(--muted); }
+  .skip{ background:none; color:var(--muted); font-size:13px; text-decoration:underline; padding:10px; margin:0 auto; }
+  .resultBig{ text-align:center; margin:10px 0 6px; }
+  .resultBig .lbl{ font-size:14px; color:var(--muted); letter-spacing:.1em; }
+  .resultBig .num{ font-size:60px; font-weight:800; color:var(--accent); line-height:1.15; font-variant-numeric:tabular-nums; }
+  .resultBig .msg{ font-size:17px; color:var(--dot); min-height:26px; margin-top:4px; }
+  .stats{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:14px 0; }
+  .stat{ padding:14px; border-radius:14px; background:var(--card); border:1px solid var(--line); text-align:center; }
+  .stat .k{ font-size:12px; color:var(--muted); }
+  .stat .v{ font-size:22px; font-weight:800; font-variant-numeric:tabular-nums; }
+
+  /* フッター */
+  footer{ padding:20px 20px calc(20px + env(safe-area-inset-bottom)); text-align:center; }
+  .med{ font-size:11.5px; color:var(--muted); line-height:1.75; }
+  .fnt-copy{ display:block; margin-top:14px; font-size:11px; letter-spacing:.14em; color:var(--muted); opacity:.8; }
+
+  /* サイドメニュー */
+  .overlay{ position:fixed; inset:0; background:rgba(0,0,0,.55); opacity:0; visibility:hidden;
+    transition:opacity .3s ease, visibility .3s ease; z-index:80; }
+  .overlay.open{ opacity:1; visibility:visible; }
+  .side{ position:fixed; top:0; right:0; height:100%; width:min(84%,340px); z-index:90;
+    background:var(--bg1); border-left:1px solid var(--line); transform:translateX(100%);
+    transition:transform .3s ease; display:flex; flex-direction:column;
+    padding:calc(16px + env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom));
+    overflow-y:auto; touch-action:auto !important; -webkit-overflow-scrolling:touch; }
+  .side *{ touch-action:auto !important; }
+  .side.open{ transform:translateX(0); }
+  .side .top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+  .side .top b{ font-size:16px; font-weight:800; }
+  .side .closeBtn{ width:44px; height:44px; border-radius:12px; background:var(--card); color:var(--ink); font-size:20px; }
+  .side h4{ font-size:12px; letter-spacing:.14em; color:var(--accent); margin:18px 0 10px; }
+  .side .whybox{ font-size:13px; color:var(--muted); line-height:1.95; }
+  .side .whybox b{ color:var(--ink); }
+  .side .whybox p + p{ margin-top:10px; }
+  .side .guide{ font-size:13px; color:var(--muted); line-height:1.9; }
+  .side .guide ol{ padding-left:20px; }
+  .side .learn{ margin-top:auto; padding-top:22px; }
+  .side .learn a{ font-size:14px; text-decoration:none; display:block; padding:12px 0; }
+  .side .side-copy{ font-size:10.5px; letter-spacing:.1em; color:var(--muted); opacity:.7; margin-top:14px; }
+
+  .lockbar{ position:fixed; left:12px; right:12px; top:calc(10px + env(safe-area-inset-top)); max-width:456px; margin:0 auto;
+    background:rgba(255,180,168,.14); border:1px solid var(--bad); color:var(--ink); font-size:12.5px; line-height:1.6;
+    padding:10px 14px; border-radius:12px; z-index:130; opacity:0; visibility:hidden; transition:opacity .3s ease, visibility .3s ease; }
+  .lockbar.show{ opacity:1; visibility:visible; }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation:none !important; transition:none !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ スプラッシュ（起動時だけ／音声のunlock） ============ -->
+<div id="splash" role="dialog" aria-label="サッカード3分を開始">
+  <img src="FNT512.png" alt="FNT ロゴ" />
+  <div class="fnt">FUNCTIONAL NEURO TRAINING</div>
+  <h1>サッカード3分</h1>
+  <p class="lead">飛ぶ点を、眼だけで追う。数字は足していく。</p>
+  <button class="tapstart" id="tapStart">タップで開始</button>
+  <div class="audioNote">
+    <span class="note">🔊 切り替わりを声でお知らせします</span>
+    <button class="muteToggle" id="muteToggle" type="button" aria-pressed="false">🔊 音声オン</button>
+  </div>
+  <div class="copy">© Functional Neuro Training / Legrandchariot</div>
+</div>
+
+<!-- ============ 本体 ============ -->
+<div class="app" id="app" aria-hidden="true">
+  <header>
+    <div class="logo"><img src="FNT512-transparent.png" alt="" /><b>サッカード3分</b></div>
+    <button class="menuBtn" id="menuBtn" aria-label="メニューを開く" aria-haspopup="true">☰</button>
+  </header>
+
+  <main>
+    <!-- トップ -->
+    <section class="screen scroll active" id="sTop">
+      <div class="step-label">SACCADE ／ 3分間</div>
+      <h2>眼を、狙った場所へ<br>一瞬で飛ばす。</h2>
+      <p class="desc">点が<b>上下 → 左右 → 斜め → ランダム</b>の順に飛びます。顔は動かさず、<b>眼だけ</b>で追ってください。点の中の数字は、足していきます。</p>
+      <ul class="howList">
+        <li><span class="no">1</span><span>スマホを顔の正面で持つ。<b>顔は固定</b>。</span></li>
+        <li><span class="no">2</span><span>点が飛んだら、<b>眼だけ</b>でパッと追いかけて、点にピタッと合わせる。</span></li>
+        <li><span class="no">3</span><span>点の中の<b>数字を足していく</b>。（3、5、2 …なら 3＋5＋2）</span></li>
+        <li><span class="no">4</span><span>3分で終わり。最後に<b>合計</b>を答えます。</span></li>
+      </ul>
+      <div class="pts">
+        <b>上下</b>・<b>左右</b>・<b>斜め</b>・<b>ランダム</b>を、各45秒。<br>
+        設定はありません。毎回同じ3分です。<br>
+        ふらつく・気持ち悪くなったら、そこで止めてください。座ってやっても大丈夫です。
+      </div>
+      <div class="cta">
+        <button class="btn" id="startBtn">3分スタート</button>
+        <div class="spacer"></div>
+      </div>
+    </section>
+
+    <!-- 答え -->
+    <section class="screen scroll" id="sAnswer">
+      <div class="step-label">ANSWER</div>
+      <h2>数字の合計は？</h2>
+      <p class="desc">3分間に出てきた数字を、全部足した答えを入れてください。</p>
+      <div class="answerBox">
+        <div class="answerShow empty" id="answerShow">ここに数字</div>
+        <div class="pad" id="pad">
+          <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+          <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+          <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+          <button data-k="C" class="sub">消す</button><button data-k="0">0</button><button data-k="B" class="sub">← 1字</button>
+        </div>
+      </div>
+      <div class="cta">
+        <div class="spacer"></div>
+        <button class="btn" id="answerBtn" disabled>答え合わせ</button>
+        <button class="skip" id="skipBtn">わからない（答えを見る）</button>
+      </div>
+    </section>
+
+    <!-- 結果 -->
+    <section class="screen scroll" id="sResult">
+      <div class="step-label">RESULT</div>
+      <div class="resultBig">
+        <div class="lbl">正しい合計</div>
+        <div class="num" id="rTrue">0</div>
+        <div class="msg" id="rMsg"></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="k">あなたの答え</div><div class="v" id="rYou">-</div></div>
+        <div class="stat"><div class="k">ずれ</div><div class="v" id="rDiff">-</div></div>
+        <div class="stat" style="grid-column:1 / -1;"><div class="k">眼が飛んで、数字が出てきた回数</div><div class="v" id="rCount">0回</div></div>
+      </div>
+      <p class="desc">眼が点に着地しないと、数字は読めません。合計がずれた日は、途中のどこかで眼か計算が追いつかなかった日です。</p>
+      <div class="cta">
+        <div class="spacer"></div>
+        <button class="btn" id="againBtn">もう一度</button>
+        <div class="spacer"></div>
+        <button class="btn ghost" id="topBtn">トップへ</button>
+        <div class="spacer"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p class="med">このアプリは脳と体を整えるためのセルフトレーニングで、医療行為ではありません。体調がすぐれないときは無理をしないでね。</p>
+    <span class="fnt-copy">© Functional Neuro Training / Legrandchariot</span>
+  </footer>
+</div>
+
+<!-- ============ プレイ（全面） ============ -->
+<div id="play" aria-label="プレイ画面">
+  <div class="topbar">
+    <div class="segName" id="segName">上下<small>1/4</small></div>
+    <div class="timeLeft" id="timeLeft">3:00</div>
+  </div>
+  <div id="field"><div id="dot" class="hide" aria-live="off">5</div></div>
+  <div class="banner" id="banner"></div>
+  <div class="ctrl">
+    <button id="pauseBtn">一時停止</button>
+    <button id="quitBtn">やめる</button>
+  </div>
+  <div class="countIn" id="countIn">3<small>顔は固定。眼だけで追う</small></div>
+  <div class="pauseCover" id="pauseCover">
+    <b>一時停止中</b>
+    <p>ここまでの合計は、覚えておいてください。</p>
+    <button class="btn" id="resumeBtn">再開する</button>
+    <button class="btn ghost" id="quit2Btn">やめる</button>
+  </div>
+</div>
+
+<!-- ============ サイドメニュー ============ -->
+<div class="overlay" id="overlay"></div>
+<nav class="side" id="side" aria-label="メニュー" aria-hidden="true">
+  <div class="top"><b>メニュー</b><button class="closeBtn" id="closeMenu" aria-label="メニューを閉じる">×</button></div>
+
+  <h4>なぜ眼？（神経科学）</h4>
+  <div class="whybox">
+    <p><b>サッケード＝眼を、狙った場所へ一瞬でパッと飛ばす動き。</b>体の中でいちばん速い動きの一つです。</p>
+    <p>脳は、眼がどこを見てどう動いたかを基準にして、体を「どこまで動かしていいか」を決めています。だから、ストレッチや体幹の前に、まず<b>眼の下地</b>を作ります。</p>
+    <p>試合で眼がどこに飛ぶかは決まっていません。だから<b>上下・左右・斜め・ランダム</b>を全部やります。</p>
+    <p>点の中の数字は、<b>眼がちゃんと点に着地したかの確かめ</b>です。着地しないと読めません。足し算で、頭も同時に使います。</p>
+  </div>
+
+  <h4>指導者の方へ</h4>
+  <div class="guide">
+    <p>ウォームアップや施術の最初に、この3分を流してください。前屈や首の回りを<b>測る → 3分 → 測り直す</b>の順でやると、変化が分かります。選手に配って、練習前にそれぞれ流してもらっても大丈夫です。</p>
+  </div>
+
+  <h4>ホーム画面に追加すると使いやすい</h4>
+  <div class="guide">
+    <ol>
+      <li>共有ボタン（□から↑のマーク）を押す</li>
+      <li>「ホーム画面に追加」を選ぶ</li>
+    </ol>
+    <p style="margin-top:8px;">※追加しなくても、そのまま全部使えます。</p>
+  </div>
+
+  <div class="learn">
+    <a href="https://bodydiscovery.info/owned-optin" target="_blank" rel="noopener">もっと学びたい人へ → https://bodydiscovery.info/owned-optin</a>
+    <span class="side-copy">© Functional Neuro Training / Legrandchariot</span>
+  </div>
+</nav>
+
+<div class="lockbar" id="lockbar" role="alert">音声を再生できませんでした。切り替わりは画面の文字で出るので、そのまま続けられます。</div>
+
+<script>
+/* =====================================================================
+   サッカード3分 本体JS
+   ・3分固定：上下 → 左右 → 斜め → ランダム（各45秒）。点は JUMP_MS ごとに飛ぶ
+   ・点の中に1桁の数字（1〜9）。最後に合計を答える
+   ・どの時刻に・どこへ・どの数字が出るかは開始時に全部決めておく（一時停止しても崩れない）
+   ・状態は window. に載せる（iOSメモリ対策）／経過時間は Date.now() の壁時計
+   ===================================================================== */
+const $ = (id) => document.getElementById(id);
+const SESSION_MS = 180000;   // 3分固定
+const SEG_MS     = 45000;    // 1パターン45秒
+const JUMP_MS    = 1200;     // 点が飛ぶ間隔
+const SEGS = [
+  { name:'上下',     say:'上下' },
+  { name:'左右',     say:'次は、左右' },
+  { name:'斜め',     say:'次は、斜め' },
+  { name:'ランダム', say:'最後は、ランダム' }
+];
+// 点の置き場（点が動く範囲に対する割合）。端から少し内側に置く
+const P = {
+  T:[.5,.06], B:[.5,.94], L:[.1,.5], R:[.9,.5],
+  TL:[.1,.06], TR:[.9,.06], BL:[.1,.94], BR:[.9,.94]
+};
+const RANDOM_POOL = ['T','B','L','R','TL','TR','BL','BR'];
+const LS_MUTE = 'saccade3.muted';
+
+/* ---- --vh 保険 ---- */
+function setVH(){ document.documentElement.style.setProperty('--vh', (window.innerHeight * 0.01) + 'px'); }
+setVH(); window.addEventListener('resize', setVH); window.addEventListener('orientationchange', setVH);
+
+/* =========================== 音 =========================== */
+window.audioCtx = null; window.audioReady = false;
+window.muted = (function(){ try{ return localStorage.getItem(LS_MUTE) === 'true'; }catch(e){ return false; } })();
+window.ttsOK = ('speechSynthesis' in window);
+window.jaVoice = null;
+
+function pickVoice(){
+  try{
+    const vs = window.speechSynthesis.getVoices() || [];
+    window.jaVoice = vs.find(v => /ja(-|_)?JP/i.test(v.lang)) || vs.find(v => /^ja/i.test(v.lang)) || null;
+  }catch(e){ window.jaVoice = null; }
+}
+if(window.ttsOK){ pickVoice(); try{ window.speechSynthesis.onvoiceschanged = pickVoice; }catch(e){} }
+
+function applyMuteUI(){
+  const b = $('muteToggle'); if(!b) return;
+  b.textContent = window.muted ? '🔇 音声オフ（文字で表示）' : '🔊 音声オン';
+  b.setAttribute('aria-pressed', window.muted ? 'true' : 'false');
+  b.classList.toggle('off', window.muted);
+}
+function setMuted(v){
+  window.muted = !!v;
+  try{ localStorage.setItem(LS_MUTE, window.muted ? 'true' : 'false'); }catch(e){}
+  applyMuteUI();
+  if(window.muted){ try{ window.speechSynthesis && window.speechSynthesis.cancel(); }catch(e){} }
+}
+function unlockAudio(){
+  try{
+    if(!window.audioCtx){ const AC = window.AudioContext || window.webkitAudioContext; window.audioCtx = new AC(); }
+    if(window.audioCtx.state === 'suspended') window.audioCtx.resume();
+    const buf = window.audioCtx.createBuffer(1, 1, 22050);
+    const src = window.audioCtx.createBufferSource();
+    src.buffer = buf; src.connect(window.audioCtx.destination); src.start(0);
+    window.audioReady = true;
+  }catch(e){ window.audioReady = false; showLockbar(); }
+  try{
+    if(window.ttsOK && !window.muted){
+      const u = new SpeechSynthesisUtterance('　'); u.lang = 'ja-JP'; u.volume = 0;
+      window.speechSynthesis.speak(u);
+    }
+  }catch(e){}
+}
+function showLockbar(){ const b = $('lockbar'); b.classList.add('show'); setTimeout(()=>b.classList.remove('show'), 5000); }
+function beep(freq, dur, vol){
+  if(window.muted || !window.audioReady || !window.audioCtx) return;
+  try{
+    const o = window.audioCtx.createOscillator(), g = window.audioCtx.createGain();
+    o.frequency.value = freq; o.type = 'sine'; o.connect(g); g.connect(window.audioCtx.destination);
+    const t = window.audioCtx.currentTime;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol || 0.14, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.start(t); o.stop(t + dur + 0.02);
+  }catch(e){}
+}
+function say(text){
+  if(window.muted || !window.ttsOK) return;
+  try{
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'ja-JP'; u.rate = 1.05; if(window.jaVoice) u.voice = window.jaVoice;
+    window.speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+/* ======================= 画面遷移 ======================= */
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const el = $(id); if(el){ el.classList.add('active'); el.scrollTop = 0; }
+}
+
+(function(){
+  const mb = $('muteToggle');
+  if(mb) mb.addEventListener('click', (e) => { e.stopPropagation(); setMuted(!window.muted); });
+  applyMuteUI();
+})();
+
+$('tapStart').addEventListener('click', () => {
+  unlockAudio();
+  $('splash').classList.add('hide');
+  $('app').setAttribute('aria-hidden','false');
+  showScreen('sTop');
+});
+
+/* ======================= Wake Lock ======================= */
+window.wakeLock = null;
+async function acquireWakeLock(){
+  try{ if('wakeLock' in navigator){ window.wakeLock = await navigator.wakeLock.request('screen'); } }catch(e){}
+}
+function releaseWakeLock(){ try{ if(window.wakeLock){ window.wakeLock.release(); window.wakeLock = null; } }catch(e){} }
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible' && window.G && window.G.running && !window.G.paused) acquireWakeLock();
+  if(document.visibilityState === 'hidden' && window.G && window.G.running && !window.G.paused) pauseGame();
+});
+
+/* ======================= 3分の中身を先に決める ======================= */
+function buildPlan(){
+  const plan = [];
+  const n = Math.floor(SESSION_MS / JUMP_MS);          // 150回
+  let lastDigit = -1, lastPos = '';
+  for(let i = 0; i < n; i++){
+    const t = i * JUMP_MS;
+    const seg = Math.min(SEGS.length - 1, Math.floor(t / SEG_MS));
+    const k = i - Math.ceil(seg * SEG_MS / JUMP_MS);    // そのパターンの中で何回目か
+    const half = (t - seg * SEG_MS) >= SEG_MS / 2;
+    let pos;
+    if(seg === 0) pos = (k % 2 === 0) ? 'T' : 'B';
+    else if(seg === 1) pos = (k % 2 === 0) ? 'L' : 'R';
+    else if(seg === 2) pos = half ? ((k % 2 === 0) ? 'TR' : 'BL') : ((k % 2 === 0) ? 'TL' : 'BR');
+    else { do{ pos = RANDOM_POOL[Math.floor(Math.random() * RANDOM_POOL.length)]; }while(pos === lastPos); }
+    // 斜めの後半の入りで同じ場所が続かないように
+    if(pos === lastPos) pos = (pos === 'TR') ? 'BL' : 'TR';
+    let d; do{ d = 1 + Math.floor(Math.random() * 9); }while(d === lastDigit);
+    plan.push({ t, seg, pos, digit:d });
+    lastDigit = d; lastPos = pos;
+  }
+  return plan;
+}
+
+/* ======================= ゲーム本体 ======================= */
+function newState(){
+  return { running:false, paused:false, startAt:0, pausedAccum:0, pauseStart:0,
+    plan:[], idx:-1, seg:-1, timer:null, bannerT:null };
+}
+window.G = newState();
+window.answer = '';
+
+function elapsed(){ const g = window.G; return (g.paused ? g.pauseStart : Date.now()) - g.startAt - g.pausedAccum; }
+function fmt(ms){ const s = Math.max(0, Math.ceil(ms/1000)); return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); }
+
+function showBanner(main, sub, ms){
+  const b = $('banner');
+  b.innerHTML = main + (sub ? '<small>' + sub + '</small>' : '');
+  b.classList.add('show');
+  clearTimeout(window.G.bannerT);
+  window.G.bannerT = setTimeout(()=>b.classList.remove('show'), ms || 1100);
+}
+function placeDot(step){
+  const dot = $('dot');
+  const p = P[step.pos];
+  dot.style.left = (p[0] * 100) + '%';
+  dot.style.top  = (p[1] * 100) + '%';
+  dot.textContent = step.digit;
+  dot.classList.remove('hide');
+}
+function setSeg(seg){
+  const g = window.G; g.seg = seg;
+  $('segName').innerHTML = SEGS[seg].name + '<small>' + (seg + 1) + '/' + SEGS.length + '</small>';
+  showBanner(SEGS[seg].name, seg === 0 ? '顔は固定。眼だけで追う' : '顔は固定のまま');
+  say(SEGS[seg].say);
+}
+
+function startGame(){
+  window.G = newState();
+  const g = window.G;
+  g.plan = buildPlan();
+  $('timeLeft').textContent = fmt(SESSION_MS);
+  $('dot').classList.add('hide');
+  $('segName').innerHTML = SEGS[0].name + '<small>1/' + SEGS.length + '</small>';
+  document.body.classList.add('playing');
+  acquireWakeLock();
+  // 3・2・1のカウントイン（ここは経過時間に含めない）
+  const ci = $('countIn'); let n = 3;
+  ci.firstChild.nodeValue = n; ci.classList.add('show'); beep(660, 0.12);
+  const iv = setInterval(() => {
+    n--;
+    if(n > 0){ ci.firstChild.nodeValue = n; beep(660, 0.12); }
+    else{
+      clearInterval(iv); ci.classList.remove('show');
+      g.running = true; g.startAt = Date.now();
+      g.timer = setInterval(tick, 30);
+      tick();
+    }
+  }, 800);
+}
+
+function tick(){
+  const g = window.G;
+  if(!g.running || g.paused) return;
+  const el = elapsed();
+  $('timeLeft').textContent = fmt(SESSION_MS - el);
+  if(el >= SESSION_MS){ finishGame(); return; }
+  const i = Math.min(g.plan.length - 1, Math.floor(el / JUMP_MS));
+  if(i !== g.idx){
+    g.idx = i;
+    const step = g.plan[i];
+    if(step.seg !== g.seg) setSeg(step.seg);
+    placeDot(step);
+    beep(520, 0.05, 0.06);
+  }
+}
+
+function pauseGame(){
+  const g = window.G; if(!g.running || g.paused) return;
+  g.paused = true; g.pauseStart = Date.now();
+  try{ window.speechSynthesis && window.speechSynthesis.cancel(); }catch(e){}
+  $('pauseCover').classList.add('show'); releaseWakeLock();
+}
+function resumeGame(){
+  const g = window.G; if(!g.paused) return;
+  g.pausedAccum += Date.now() - g.pauseStart; g.paused = false;
+  $('pauseCover').classList.remove('show'); acquireWakeLock();
+}
+function stopTimers(){
+  const g = window.G; clearInterval(g.timer); clearTimeout(g.bannerT); g.running = false;
+  $('banner').classList.remove('show');
+  try{ window.speechSynthesis && window.speechSynthesis.cancel(); }catch(e){}
+}
+function quitGame(){
+  stopTimers(); $('pauseCover').classList.remove('show');
+  document.body.classList.remove('playing'); releaseWakeLock();
+  showScreen('sTop');
+}
+function finishGame(){
+  stopTimers();
+  document.body.classList.remove('playing'); releaseWakeLock();
+  beep(990, 0.25); setTimeout(()=>beep(1320, 0.3), 180);
+  say('おつかれさまでした。合計を答えてください');
+  window.answer = ''; renderAnswer();
+  showScreen('sAnswer');
+}
+
+/* ======================= 答え合わせ ======================= */
+function renderAnswer(){
+  const s = $('answerShow');
+  if(window.answer === ''){ s.textContent = 'ここに数字'; s.classList.add('empty'); }
+  else{ s.textContent = window.answer; s.classList.remove('empty'); }
+  $('answerBtn').disabled = (window.answer === '');
+}
+$('pad').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if(!b) return;
+  const k = b.dataset.k;
+  if(k === 'C') window.answer = '';
+  else if(k === 'B') window.answer = window.answer.slice(0, -1);
+  else if(window.answer.length < 4){ window.answer = (window.answer === '0') ? k : window.answer + k; }
+  renderAnswer();
+});
+function showResult(you){
+  const g = window.G;
+  const truth = g.plan.reduce((a, s) => a + s.digit, 0);
+  $('rTrue').textContent = truth;
+  $('rCount').textContent = g.plan.length + '回';
+  if(you === null){
+    $('rYou').textContent = '-'; $('rDiff').textContent = '-';
+    $('rMsg').textContent = '次は、合計まで追いかけてみよう';
+  }else{
+    const diff = you - truth;
+    $('rYou').textContent = you;
+    $('rDiff').textContent = diff === 0 ? '0' : (diff > 0 ? '+' + diff : String(diff));
+    const ad = Math.abs(diff);
+    $('rMsg').textContent = ad === 0 ? 'ぴったり！' : (ad <= 10 ? 'おしい！' : 'もう一度、眼と計算を最後まで');
+  }
+  showScreen('sResult');
+}
+$('answerBtn').addEventListener('click', () => { if(window.answer !== '') showResult(parseInt(window.answer, 10)); });
+$('skipBtn').addEventListener('click', () => showResult(null));
+
+$('startBtn').addEventListener('click', () => { unlockAudio(); startGame(); });
+$('againBtn').addEventListener('click', () => { unlockAudio(); startGame(); });
+$('topBtn').addEventListener('click', () => showScreen('sTop'));
+$('pauseBtn').addEventListener('click', pauseGame);
+$('resumeBtn').addEventListener('click', resumeGame);
+$('quitBtn').addEventListener('click', quitGame);
+$('quit2Btn').addEventListener('click', quitGame);
+
+/* ======================= サイドメニュー ======================= */
+function openMenu(){ $('side').classList.add('open'); $('overlay').classList.add('open'); $('side').setAttribute('aria-hidden','false'); $('closeMenu').focus(); }
+function closeMenu(){ $('side').classList.remove('open'); $('overlay').classList.remove('open'); $('side').setAttribute('aria-hidden','true'); $('menuBtn').focus(); }
+$('menuBtn').addEventListener('click', openMenu);
+$('closeMenu').addEventListener('click', closeMenu);
+$('overlay').addEventListener('click', closeMenu);
+document.addEventListener('keydown', (e) => { if(e.key === 'Escape' && $('side').classList.contains('open')) closeMenu(); });
+
+/* ======================= Service Worker ======================= */
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if(refreshing) return; refreshing = true; location.reload();
+  });
+}
+</script>
+</body>
+</html>

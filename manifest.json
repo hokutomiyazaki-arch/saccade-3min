@@ -1,0 +1,19 @@
+{
+  "name": "サッカード3分 ─ 眼の下地づくり",
+  "short_name": "サッカード3分",
+  "description": "上下・左右・斜め・ランダムに飛ぶ点を、眼だけで追う3分間のサッケード。点の中の数字を足していき、最後に合計を答える。Functional Neuro TrainingのLite PWA。",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1a20",
+  "theme_color": "#0b1a20",
+  "scope": "./",
+  "lang": "ja",
+  "dir": "ltr",
+  "categories": ["health", "fitness", "games"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
